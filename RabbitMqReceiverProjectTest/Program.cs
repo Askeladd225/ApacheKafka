@@ -1,0 +1,44 @@
+﻿using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System.Text;
+
+namespace RabbitMqReceiverProjectTest
+{
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            ConnectionFactory factotry = new();
+            factotry.Uri = new Uri("amqp://guest:guest@localhost:5672");
+            factotry.ClientProvidedName = "RABBIT Receiver App";
+
+            IConnection connextion = factotry.CreateConnection();
+
+            IModel channel = connextion.CreateModel();
+
+            string exchangeName = "DemoExchange";
+            string routingKey = "demo-routing-key";
+            string queueName = "DemoQueue";
+
+            channel.ExchangeDeclare(exchangeName, ExchangeType.Direct);
+            channel.QueueDeclare(queueName, false, false, false, null);
+            channel.QueueBind(queueName, exchangeName, routingKey, null);
+            channel.BasicQos(0, 1, false);
+            var consumer = new EventingBasicConsumer(channel);
+            consumer.Received += (sender, args) =>
+            {
+                Task.Delay(TimeSpan.FromSeconds(5)).Wait();
+                var body = args.Body.ToArray();
+                string message = Encoding.UTF8.GetString(body);
+
+                Console.WriteLine($"Vous avez reçue {message}");
+                channel.BasicAck(args.DeliveryTag, false); 
+            };
+            string consumerTag = channel.BasicConsume(queueName, false, consumer);
+            Console.ReadLine();
+            channel.BasicCancel(consumerTag);
+            channel.Close();
+            connextion.Close();
+        }
+    }
+}
